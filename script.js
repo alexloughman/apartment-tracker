@@ -1996,6 +1996,15 @@ function wireCsvImport() {
   });
 }
 
+/** Export data as JSON for the Scriptable iOS widget. */
+function exportJSON() {
+  const payload = JSON.stringify({
+    apartments: apartments.map(({ scores, finalScore, rank, explanation, _w, ...rest }) => rest),
+    weights: getWeights(),
+  }, null, 2);
+  triggerDownload('apartment-ranker-data.json', payload, 'application/json');
+}
+
 /** Wire the export and clear-saved buttons. */
 function wireExport() {
   document.getElementById('btn-export-csv').addEventListener('click', () => {
@@ -2004,6 +2013,10 @@ function wireExport() {
 
   document.getElementById('btn-export-html').addEventListener('click', () => {
     exportHTML(rankApartments(apartments, getWeights()));
+  });
+
+  document.getElementById('btn-export-json').addEventListener('click', () => {
+    exportJSON();
   });
 
   document.getElementById('btn-clear-saved').addEventListener('click', () => {
