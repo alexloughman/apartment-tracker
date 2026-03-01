@@ -44,7 +44,7 @@ const API_CONFIG = {
   googleMaps: {
     // Get a key at https://console.cloud.google.com
     // Enable: Maps JavaScript API + Geocoding API (same key for both)
-    key: 'AIzaSyCmDmrlwKaVuh0POfPn8ESf28RtW6BrIFE',
+    key: 'AIzaSyB5iTJCLh9IosW-XA2vvPzktSkEgoBcNPc',
   },
 };
 
@@ -1555,6 +1555,11 @@ const STORAGE_KEY_APTS    = 'aptRanker_v1_apartments';
 const STORAGE_KEY_WEIGHTS = 'aptRanker_v1_weights';
 const STORAGE_KEY_ORDER   = 'aptRanker_v1_order';
 
+// Google Drive constants must also be declared before init() to avoid TDZ errors
+const GOOGLE_CLIENT_ID = '189076340424-0skekif1m4lo1e4f6targ0kskrmk5vtr.apps.googleusercontent.com';
+const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILENAME   = 'apartment-ranker-data.json';
+
 init();
 
 /**
@@ -2059,10 +2064,6 @@ function wireDarkMode() {
 // Data file: "apartment-ranker-data.json" in the user's Drive root
 // Schema: { apartments: [...rawFields], weights: {...} }
 // ============================================================
-
-const GOOGLE_CLIENT_ID = '189076340424-0skekif1m4lo1e4f6targ0kskrmk5vtr.apps.googleusercontent.com';
-const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file';
-const DRIVE_FILENAME   = 'apartment-ranker-data.json';
 
 let driveToken     = null;  // current GIS access token string
 let driveFileId    = null;  // Drive file ID once located/created
