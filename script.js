@@ -1555,7 +1555,7 @@ const STORAGE_KEY_WEIGHTS = 'aptRanker_v1_weights';
 const STORAGE_KEY_ORDER   = 'aptRanker_v1_order';
 
 // Google Drive constants must also be declared before init() to avoid TDZ errors
-const GOOGLE_CLIENT_ID = '189076340424-0skekif1m4lo1e4f6targ0kskrmk5vtr.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = '189076340424-61hgg4ga0jt87u4fpna78d51bgl3e9tr.apps.googleusercontent.com';
 const DRIVE_SCOPE      = 'https://www.googleapis.com/auth/drive.file';
 const DRIVE_FILENAME   = 'apartment-ranker-data.json';
 
