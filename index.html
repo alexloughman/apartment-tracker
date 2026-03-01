@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apartment Ranker</title>
+  <script>
+    /* Apply dark class before paint to prevent flash of unstyled content */
+    (function(){
+      if (localStorage.getItem('aptRanker_darkMode') === '1')
+        document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    :root {
+      --bg:       #f4f6fb;
+      --surface:  #ffffff;
+      --border:   #e2e7ef;
+      --primary:  #4f6ef7;
+      --pri-dark: #3a57d4;
+      --text:     #1a1f2e;
+      --muted:    #6b7280;
+      --green:    #16a34a;
+      --amber:    #d97706;
+      --red:      #dc2626;
+      --radius:   10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      font-size: 15px;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #4f6ef7 0%, #6b47f5 100%);
+      color: #fff;
+      padding: 1.4rem 2rem;
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    header h1   { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
+    header p    { font-size: 0.8rem; opacity: 0.78; }
+
+    /* ── Layout ──────────────────────────────────────────── */
+    main {
+      max-width: 1120px;
+      margin: 1.75rem auto;
+      padding: 0 1.25rem;
+      display: grid;
+      grid-template-columns: 270px 1fr;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    /* ── Card shell ──────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
+      margin-bottom: 1rem;
+    }
+    .card:last-child { margin-bottom: 0; }
+
+    .card-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+
+    /* ── Weight sliders ──────────────────────────────────── */
+    .weight-row       { margin-bottom: 0.85rem; }
+    .weight-row:last-of-type { margin-bottom: 0; }
+    .weight-header    { display: flex; justify-content: space-between; margin-bottom: 0.3rem; font-size: 0.85rem; font-weight: 500; }
+    .weight-header em { color: var(--primary); font-style: normal; font-weight: 700; min-width: 24px; text-align: right; }
+
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    /* ── Text inputs (add form) ──────────────────────────── */
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
+      margin-bottom: 0.6rem;
+    }
+    .field label { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
+    .field input {
+      padding: 0.45rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: inherit;
+      color: var(--text);
+      background: var(--bg);
+      transition: border-color 0.15s;
+    }
+    .field input:focus { outline: none; border-color: var(--primary); background: #fff; }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 0.65rem;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-green { background: #22c55e; color: #fff; margin-top: 0.25rem; }
+    .btn-green:hover { opacity: 0.88; }
+    .btn-ghost { background: transparent; color: var(--primary); border: 1.5px solid var(--primary); margin-top: 0.25rem; }
+    .btn-ghost:hover { background: #eff6ff; }
+
+    /* ── Import status ────────────────────────────────────── */
+    .import-status {
+      margin-top: 0.55rem;
+      font-size: 0.75rem;
+      border-radius: 6px;
+      padding: 0.45rem 0.6rem;
+      display: none;
+    }
+    .import-status.loading { display: block; color: var(--primary);  background: #eff6ff; }
+    .import-status.success { display: block; color: #15803d;         background: #f0fdf4; }
+    .import-status.error   { display: block; color: var(--red);      background: #fef2f2; }
+    .import-status.warn    { display: block; color: var(--amber);    background: #fffbeb; }
+
+    /* ── Results column ──────────────────────────────────── */
+    #results-col { display: flex; flex-direction: column; gap: 0; }
+
+    .results-meta {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+    .results-meta strong { color: var(--text); }
+    .results-meta span   { color: var(--primary); }
+
+    .empty-state {
+      text-align: center;
+      padding: 3.5rem 1rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    /* ── Apartment cards ─────────────────────────────────── */
+    #results { display: flex; flex-direction: column; gap: 0.85rem; }
+
+    .apt-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.1rem 1.2rem;
+      display: grid;
+      grid-template-columns: 18px 44px 1fr 72px;
+      gap: 1rem;
+      align-items: start;
+      transition: box-shadow 0.2s;
+    }
+    .apt-card:hover { box-shadow: 0 4px 14px rgba(79,110,247,.09); }
+
+    /* ── Drag-to-reorder ─────────────────────────────────── */
+    .drag-handle {
+      color: var(--border); cursor: grab; font-size: 1.1rem;
+      user-select: none; align-self: center; padding: 0 2px;
+      line-height: 1;
+    }
+    .drag-handle:hover { color: var(--muted); }
+    .apt-card[draggable="true"] { cursor: default; }
+    .apt-card.dragging  { opacity: 0.35; }
+    .apt-card.drag-over {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(79,110,247,.25);
+    }
+
+    /* rank badge */
+    .rank-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.95rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .rank-badge.gold   { background: #f59e0b; }
+    .rank-badge.silver { background: #9ca3af; }
+    .rank-badge.bronze { background: #b45309; }
+
+    /* info column */
+    .apt-name    { font-size: 1rem; font-weight: 700; }
+    .apt-address { font-size: 0.78rem; color: var(--muted); margin-top: 1px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .chip  {
+      font-size: 0.72rem;
+      border-radius: 100px;
+      padding: 0.2rem 0.55rem;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: var(--bg);
+    }
+    .chip.price { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; font-weight: 700; }
+    .chip.size  { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; font-weight: 600; }
+    .chip.loc   { background: #fefce8; border-color: #fde68a; color: #92400e; }
+    .chip.beds  { background: #faf5ff; border-color: #e9d5ff; color: #6d28d9; }
+    .chip.fees  { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: 600; }
+    .chip.user  { background: #fdf4ff; border-color: #e9d5ff; color: #7e22ce; font-size: 0.68rem; }
+
+    .apt-total  { font-size: 0.72rem; color: var(--muted); margin-top: 0.3rem; }
+    .apt-total strong { color: var(--text); font-variant-numeric: tabular-nums; }
+
+    /* ── Map ─────────────────────────────────────────────── */
+    #map-wrap { margin-bottom: 0.85rem; }
+    #map      { height: 340px; border-radius: var(--radius); border: 1px solid var(--border); }
+    .map-note { font-size: 0.72rem; color: var(--muted); margin-top: 0.35rem; }
+
+    /* ── Listing link + thumbnail on cards ──────────────── */
+    .listing-link {
+      display: inline-flex; align-items: center; gap: 0.2rem;
+      font-size: 0.72rem; color: var(--primary); text-decoration: none;
+      margin-top: 0.25rem;
+    }
+    .listing-link:hover { text-decoration: underline; }
+
+    .listing-thumb-wrap { margin-top: 0.5rem; line-height: 0; }
+    .listing-thumb {
+      display: block;
+      width: 240px;
+      height: 140px;
+      object-fit: cover;
+      object-position: top;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--border);
+      transition: opacity 0.15s, box-shadow 0.15s;
+    }
+    .listing-thumb:hover { opacity: 0.88; box-shadow: 0 3px 10px rgba(0,0,0,.12); }
+    .btn-map  {
+      width: auto; padding: 0.3rem 0.75rem; font-size: 0.75rem;
+      background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    }
+    .btn-map:hover { background: #eff6ff; color: var(--primary); border-color: var(--primary); }
+
+    /* amenity tags */
+    .amenities   { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.55rem; }
+    .amen-tag    { font-size: 0.68rem; background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; border-radius: 4px; padding: 0.1rem 0.4rem; }
+
+    /* score bars */
+    .score-bars { margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.32rem; }
+    .srow       { display: flex; align-items: center; gap: 0.5rem; font-size: 0.72rem; }
+    .slabel     { width: 62px; color: var(--muted); flex-shrink: 0; }
+    .sbar-bg    { flex: 1; height: 5px; background: #e9ecef; border-radius: 100px; overflow: hidden; }
+    .sbar-fill  { height: 100%; border-radius: 100px; transition: width 0.5s ease; }
+    .sval       { width: 26px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    /* explanation */
+    .explanation {
+      margin-top: 0.7rem;
+      padding-top: 0.65rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* final score column */
+    .final-score { text-align: right; padding-top: 2px; }
+    .fs-number   { font-size: 2.1rem; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    .fs-denom    { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* ── Remove / Edit buttons on cards ─────────────────────── */
+    .btn-remove, .btn-edit {
+      display: inline-flex; align-items: center; gap: 0.2rem;
+      margin-top: 0.5rem; background: none; border: none;
+      color: var(--muted); font-size: 0.72rem; padding: 0.15rem 0;
+      cursor: pointer; font-family: inherit; transition: color 0.15s;
+    }
+    .btn-remove { margin-right: 0.6rem; }
+    .btn-remove:hover { color: var(--red); }
+    .btn-edit:hover   { color: var(--primary); }
+
+    /* ── Inline edit form on cards ───────────────────────────── */
+    .apt-edit-form { grid-column: 1 / -1; padding-top: 0.1rem; }
+    .edit-form-title {
+      font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.07em; color: var(--muted); margin-bottom: 0.65rem;
+    }
+    .edit-grid {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 0.4rem 0.55rem; margin-bottom: 0.6rem;
+    }
+    .edit-field { display: flex; flex-direction: column; gap: 0.2rem; }
+    .edit-field label { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
+    .edit-field input {
+      padding: 0.36rem 0.52rem; border: 1px solid var(--border);
+      border-radius: 6px; font-size: 0.82rem; font-family: inherit;
+      color: var(--text); background: var(--bg); transition: border-color 0.15s;
+    }
+    .edit-field input:focus { outline: none; border-color: var(--primary); background: #fff; }
+    .edit-full { grid-column: 1 / -1; }
+    .edit-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+    /* ── Tour-scheduled checkbox ─────────────────────────────── */
+    .tour-row {
+      display: inline-flex; align-items: center; gap: 0.35rem;
+      margin-top: 0.55rem; font-size: 0.75rem; color: var(--muted);
+      cursor: pointer; user-select: none;
+    }
+    .tour-row input[type="checkbox"] {
+      width: 14px; height: 14px; accent-color: var(--green); cursor: pointer;
+    }
+    .tour-row.scheduled { color: var(--green); font-weight: 600; }
+
+    /* ── Export buttons ──────────────────────────────────────── */
+    .btn-export {
+      width: auto; padding: 0.3rem 0.6rem; font-size: 0.72rem;
+      background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); font-weight: 600;
+    }
+    .btn-export:hover { background: #eff6ff; color: var(--primary); border-color: var(--primary); }
+    .save-indicator {
+      font-size: 0.7rem; color: var(--green); display: none;
+      align-items: center; gap: 0.2rem; white-space: nowrap;
+    }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 720px) {
+      main { grid-template-columns: 1fr; }
+      .apt-card { grid-template-columns: 18px 44px 1fr; }
+      .final-score { display: none; }
+    }
+
+    /* ── Print ───────────────────────────────────────────── */
+    @media print {
+      aside                    { display: none; }
+      main                     { display: block; padding: 0; max-width: 100%; }
+      .results-meta button,
+      #map-wrap                { display: none !important; }
+      .apt-card                { break-inside: avoid; box-shadow: none; }
+      header                   { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+
+    /* ── Theme toggle button (lives in header) ───────────── */
+    .btn-theme {
+      margin-left: auto;
+      align-self: center;
+      background: rgba(255,255,255,0.15);
+      border: 1.5px solid rgba(255,255,255,0.35);
+      color: #fff;
+      border-radius: 20px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-theme:hover { background: rgba(255,255,255,0.28); }
+
+    /* ── Dark mode ───────────────────────────────────────── */
+    html.dark {
+      --bg:      #0f1117;
+      --surface: #1a1f2e;
+      --border:  #2d3348;
+      --text:    #e2e8f0;
+      --muted:   #94a3b8;
+    }
+    html.dark header {
+      background: linear-gradient(135deg, #3a57d4 0%, #5533c7 100%);
+    }
+    html.dark .field input:focus,
+    html.dark .edit-field input:focus { background: var(--surface); }
+    html.dark .btn-ghost:hover        { background: rgba(79,110,247,0.15); }
+    html.dark .btn-export:hover,
+    html.dark .btn-map:hover {
+      background: rgba(79,110,247,0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    html.dark .sbar-bg { background: #2d3348; }
+
+    /* coloured chips → muted dark equivalents */
+    html.dark .chip.price { background: rgba(30,58,138,0.25);  border-color: #1e40af; color: #93c5fd; }
+    html.dark .chip.size  { background: rgba(20,83,45,0.25);   border-color: #166534; color: #86efac; }
+    html.dark .chip.loc   { background: rgba(120,53,15,0.25);  border-color: #92400e; color: #fcd34d; }
+    html.dark .chip.beds  { background: rgba(76,29,149,0.25);  border-color: #6d28d9; color: #c4b5fd; }
+    html.dark .chip.fees  { background: rgba(124,45,18,0.25);  border-color: #9a3412; color: #fb923c; }
+    html.dark .chip.user  { background: rgba(88,28,135,0.25);  border-color: #7e22ce; color: #d8b4fe; }
+    html.dark .amen-tag   { background: rgba(20,83,45,0.25);   border-color: #166534; color: #86efac; }
+
+    /* import status banners */
+    html.dark .import-status.loading { background: rgba(30,58,138,0.25); }
+    html.dark .import-status.success { background: rgba(20,83,45,0.25);  color: #86efac; }
+    html.dark .import-status.error   { background: rgba(127,29,29,0.25); }
+    html.dark .import-status.warn    { background: rgba(120,53,15,0.25); }
+
+    /* misc */
+    html.dark .apt-card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Apartment Ranker</h1>
+  <p>Personal comparison tool &mdash; adjust weights to match your priorities, then rank.</p>
+  <button class="btn-theme" id="btn-theme">◑ Dark Mode</button>
+</header>
+
+<main>
+
+  <!-- ── Sidebar ── -->
+  <aside>
+
+    <!-- Weight controls -->
+    <div class="card">
+      <div class="card-title">Ranking Weights</div>
+
+      <div class="weight-row">
+        <div class="weight-header">Price <em id="lbl-price">80</em></div>
+        <input type="range" id="w-price" min="0" max="100" value="80">
+      </div>
+
+      <div class="weight-row">
+        <div class="weight-header">Size (sq ft) <em id="lbl-size">60</em></div>
+        <input type="range" id="w-size" min="0" max="100" value="60">
+      </div>
+
+      <div class="weight-row">
+        <div class="weight-header">Location <em id="lbl-location">70</em></div>
+        <input type="range" id="w-location" min="0" max="100" value="70">
+      </div>
+
+      <div class="weight-row">
+        <div class="weight-header">Amenities <em id="lbl-amenities">50</em></div>
+        <input type="range" id="w-amenities" min="0" max="100" value="50">
+      </div>
+    </div>
+
+    <!-- Data source / refresh -->
+    <div class="card">
+      <div class="card-title">Data Source</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem;">
+        Using <strong id="source-label">sample data</strong>.
+        To connect a live API, set <code>API_CONFIG</code> in <code>script.js</code>.
+      </p>
+      <p id="save-status" style="font-size:0.72rem;color:var(--green);margin-bottom:0.55rem;display:none;">
+        ✓ Loaded from browser storage
+      </p>
+      <!-- TODO: wire a city/zip input here once the API proxy is set up -->
+      <button class="btn btn-primary" id="btn-rank">Re-rank Apartments</button>
+      <button class="btn btn-ghost" id="btn-clear-saved" style="margin-top:0.4rem;font-size:0.78rem;">Clear Saved Data</button>
+      <button class="btn btn-ghost" id="btn-remove-sample" style="margin-top:0.4rem;font-size:0.78rem;">Remove Sample Data</button>
+    </div>
+
+    <!-- Import from URL -->
+    <div class="card">
+      <div class="card-title">Import from URL</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.75rem;">
+        Paste a listing link from Craigslist, Zillow, Apartments.com, etc.
+        We'll pre-fill the form below &mdash; verify before adding.
+      </p>
+      <div class="field">
+        <label>Listing URL</label>
+        <input type="url" id="f-url" placeholder="https://…">
+      </div>
+      <button class="btn btn-primary" id="btn-import">Import from URL</button>
+      <div class="import-status" id="import-status"></div>
+    </div>
+
+    <!-- CSV Upload -->
+    <div class="card">
+      <div class="card-title">Import from CSV</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.65rem;">
+        Upload a CSV previously exported from this tool. Apartments will be added to your current list.
+      </p>
+      <div class="field">
+        <label>CSV File</label>
+        <input type="file" id="f-csv-upload" accept=".csv" style="font-size:0.8rem;padding:0.3rem 0;">
+      </div>
+      <button class="btn btn-primary" id="btn-csv-import">Import CSV</button>
+      <div class="import-status" id="csv-import-status"></div>
+    </div>
+
+    <!-- Google Drive Sync -->
+    <div class="card">
+      <div class="card-title">Google Drive Sync</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:0.75rem;">
+        Sync your apartments across devices via a single JSON file in your Google Drive.
+        Requires a hosted URL — won't work on <code>file://</code>.
+      </p>
+      <p id="drive-status" style="font-size:0.75rem;color:var(--muted);margin-bottom:0.5rem;">Not connected</p>
+      <button class="btn btn-primary" id="btn-drive-connect">Connect Google Drive</button>
+      <button class="btn btn-ghost" id="btn-drive-save" style="display:none">↑ Save to Drive</button>
+      <button class="btn btn-ghost" id="btn-drive-load" style="display:none">↓ Load from Drive</button>
+      <div class="import-status" id="drive-import-status"></div>
+    </div>
+
+    <!-- Add apartment manually -->
+    <div class="card">
+      <div class="card-title">Add an Apartment</div>
+
+      <div class="field">
+        <label>Address / Neighborhood</label>
+        <input type="text" id="f-address" placeholder="e.g. 123 Oak St, Pearl District">
+      </div>
+
+      <div class="field">
+        <label>Name / Building <span style="font-weight:400;font-style:italic;">optional</span></label>
+        <input type="text" id="f-name" placeholder="e.g. The Parkview">
+      </div>
+
+      <div class="field">
+        <label>Listing URL (optional)</label>
+        <input type="url" id="f-listing-url" placeholder="https://craigslist.org/…">
+      </div>
+
+      <div class="field">
+        <label>Photo URL <span style="font-weight:400;font-style:italic;">optional — right-click any listing photo → Copy image address</span></label>
+        <input type="url" id="f-photo-url" placeholder="https://…/photo.jpg">
+      </div>
+
+      <div class="field">
+        <label>Monthly Rent ($)</label>
+        <input type="number" id="f-price" placeholder="e.g. 1850" min="0">
+      </div>
+
+      <div class="field">
+        <label>Additional Fees ($/mo) <span style="font-weight:400;font-style:italic;">optional — parking, pet, utilities…</span></label>
+        <input type="number" id="f-fees" placeholder="e.g. 150" min="0">
+      </div>
+
+      <div class="field">
+        <label>Square Footage</label>
+        <input type="number" id="f-size" placeholder="e.g. 780" min="0">
+      </div>
+
+      <div class="field">
+        <label>Location Score (0–100)</label>
+        <input type="number" id="f-loc" placeholder="e.g. 75" min="0" max="100">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+        <div class="field" style="margin-bottom:0">
+          <label>Bedrooms</label>
+          <input type="number" id="f-beds" placeholder="e.g. 2" min="0" step="1">
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <label>Bathrooms</label>
+          <input type="number" id="f-baths" placeholder="e.g. 1" min="0" step="0.5">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Amenities (comma-separated)</label>
+        <input type="text" id="f-amenities" placeholder="Gym, Parking, A/C">
+      </div>
+
+      <button class="btn btn-green" id="btn-add">Add &amp; Re-rank</button>
+    </div>
+
+  </aside>
+
+  <!-- ── Results column ── -->
+  <section id="results-col">
+    <div class="results-meta" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.4rem;">
+      <span>Showing <strong id="apt-count">—</strong> apartments &mdash; source: <span id="data-source">loading…</span></span>
+      <div style="display:flex;gap:0.4rem;align-items:center;">
+        <span class="save-indicator" id="save-indicator">✓ Saved</span>
+        <button class="btn btn-export" id="btn-reset-order"
+          style="display:none;color:var(--amber);border-color:var(--amber);"
+          title="Revert to score-based order">↺ Reset Order</button>
+        <button class="btn btn-map" id="btn-map">Show Map</button>
+        <button class="btn btn-export" id="btn-export-csv" title="Download ranked list as CSV (Excel/Sheets)">↓ CSV</button>
+        <button class="btn btn-export" id="btn-export-html" title="Download shareable HTML report">↓ HTML</button>
+      </div>
+    </div>
+
+    <!-- Map container — hidden until toggled -->
+    <div id="map-wrap" style="display:none;">
+      <div id="map"></div>
+      <p class="map-note">
+        Locations geocoded via Google Maps. Mock data uses preset coordinates.
+        Real addresses work best for imported/added apartments.
+      </p>
+    </div>
+
+    <div id="results">
+      <div class="empty-state">Loading apartments…</div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Google Identity Services (GIS) — for Google Drive OAuth token flow -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="script.js"></script>
+</body>
+</html>
