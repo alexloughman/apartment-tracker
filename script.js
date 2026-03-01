@@ -2195,6 +2195,9 @@ function wireDrive() {
     return;
   }
 
+  // tokenClient is set once GIS loads — hoisted so the click handler can reference it
+  let tokenClient = null;
+
   // Wait for GIS library to load, then create the token client
   function initTokenClient() {
     if (!window.google?.accounts?.oauth2) {
@@ -2203,7 +2206,7 @@ function wireDrive() {
       return;
     }
 
-    const tokenClient = google.accounts.oauth2.initTokenClient({
+    tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope:     DRIVE_SCOPE,
       callback:  async (resp) => {
@@ -2221,14 +2224,23 @@ function wireDrive() {
         setDriveStatus('Connected — use Save or Load below.', 'success');
       },
     });
-
-    btnConnect.addEventListener('click', () => {
-      driveToken = null; // force fresh token request
-      tokenClient.requestAccessToken({ prompt: 'consent' });
-    });
   }
 
   initTokenClient();
+
+  // Click handler is always attached — checks if tokenClient is ready
+  btnConnect.addEventListener('click', () => {
+    if (!tokenClient) {
+      setDriveStatus('Google sign-in is still loading, please try again in a moment.', 'warn');
+      return;
+    }
+    if (location.protocol === 'file:') {
+      setDriveStatus('Google sign-in requires a hosted URL — open the app via GitHub Pages or a local server (not file://).', 'error');
+      return;
+    }
+    driveToken = null; // force fresh token request
+    tokenClient.requestAccessToken({ prompt: 'consent' });
+  });
 
   // ── Save to Drive ────────────────────────────────────────────
   btnSave.addEventListener('click', async () => {
