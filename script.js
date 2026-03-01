@@ -1524,7 +1524,6 @@ async function init() {
     wireExport();
     wireRemove();
     wireEdit();
-    wireCsvImport();
     wireDarkMode();
     wireDrag();
     wireDrive();
@@ -1883,118 +1882,6 @@ function wireEdit() {
   });
 }
 
-// ── CSV Import ────────────────────────────────────────────────
-
-/**
- * Parse a CSV string (RFC-4180) into an array of row arrays.
- * Handles quoted fields, embedded commas, and escaped double-quotes.
- */
-function parseCSV(text) {
-  const rows = [];
-  let row = [], field = '', inQuote = false;
-  // Normalize line endings
-  const chars = (text.replace(/\r\n/g, '\n').replace(/\r/g, '\n') + '\n').split('');
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-    if (inQuote) {
-      if (c === '"') {
-        if (chars[i + 1] === '"') { field += '"'; i++; } // escaped quote
-        else inQuote = false;
-      } else {
-        field += c;
-      }
-    } else {
-      if (c === '"')  { inQuote = true; }
-      else if (c === ',') { row.push(field); field = ''; }
-      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-      else { field += c; }
-    }
-  }
-  return rows;
-}
-
-/**
- * Convert a parsed CSV row array (from the exported format) into an apartment object.
- * Columns: Rank,Name,Address,Neighborhood,Beds,Baths,Price,Size,LocationScore,
- *          Amenities,FinalScore,ScorePrice,ScoreSize,ScoreLoc,ScoreAmenities,URL,TourScheduled
- * Score columns are ignored — they're recomputed on load.
- */
-function csvRowToApartment(headers, row) {
-  const col = name => {
-    const idx = headers.findIndex(h => h.trim().toLowerCase() === name.toLowerCase());
-    return idx >= 0 ? (row[idx] ?? '').trim() : '';
-  };
-  const name  = col('Name');
-  const price = parseFloat(col('Price ($/mo)'));
-  const size  = parseFloat(col('Size (sq ft)'));
-  if (isNaN(price) || isNaN(size)) return null; // skip invalid rows
-
-  const bedsRaw     = col('Beds');
-  const bathsRaw    = col('Baths');
-  const feesRaw     = col('Additional Fees ($/mo)');
-  const locRaw      = col('Location Score');
-  const amenRaw     = col('Amenities');
-  const urlRaw      = col('Listing URL');
-  const photoUrlRaw = col('Photo URL');
-  const tour        = col('Tour Scheduled');
-
-  return {
-    id:             `csv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    name,
-    address:        col('Address'),
-    neighborhood:   col('Neighborhood'),
-    price,
-    additionalFees: feesRaw === '' ? null : Math.max(0, parseFloat(feesRaw)),
-    size,
-    beds:           bedsRaw  === '' ? null : parseInt(bedsRaw,  10),
-    baths:          bathsRaw === '' ? null : parseFloat(bathsRaw),
-    locationScore:  locRaw   === '' ? 50   : Math.min(100, Math.max(0, parseFloat(locRaw))),
-    amenities:      amenRaw ? amenRaw.split(';').map(s => s.trim()).filter(Boolean) : [],
-    url:            urlRaw || '#',
-    photoUrl:       photoUrlRaw || null,
-    source:         'csv',
-    tourScheduled:  tour.toLowerCase() === 'yes',
-  };
-}
-
-/** Wire the CSV import file-upload button. */
-function wireCsvImport() {
-  const btn    = document.getElementById('btn-csv-import');
-  const fileIn = document.getElementById('f-csv-upload');
-  const status = document.getElementById('csv-import-status');
-
-  function setStatus(type, msg) {
-    status.className = `import-status ${type}`;
-    status.textContent = msg;
-  }
-
-  btn.addEventListener('click', () => {
-    const file = fileIn.files[0];
-    if (!file) { setStatus('error', 'Choose a CSV file first.'); return; }
-
-    const reader = new FileReader();
-    reader.onload = ev => {
-      try {
-        const rows    = parseCSV(ev.target.result).filter(r => r.some(c => c.trim()));
-        if (rows.length < 2) { setStatus('error', 'CSV appears empty or has no data rows.'); return; }
-
-        const headers = rows[0];
-        const parsed  = rows.slice(1).map(r => csvRowToApartment(headers, r)).filter(Boolean);
-        if (parsed.length === 0) { setStatus('error', 'No valid apartment rows found. Check the file format.'); return; }
-
-        apartments.push(...parsed);
-        rerank();
-        fileIn.value = '';
-        setStatus('success', `Imported ${parsed.length} apartment${parsed.length !== 1 ? 's' : ''} — review below.`);
-      } catch (err) {
-        console.error('CSV import error:', err);
-        setStatus('error', `Import failed: ${err.message}`);
-      }
-    };
-    reader.onerror = () => setStatus('error', 'Could not read the file.');
-    reader.readAsText(file);
-  });
-}
 
 /** Export data as JSON for the Scriptable iOS widget. */
 function exportJSON() {
